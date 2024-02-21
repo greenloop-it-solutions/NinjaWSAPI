@@ -6,7 +6,7 @@ To load:
 
 To create a new session:
 ```
-$NINJA_BASE_FQDN = "greenloop.rmmservice.com"
+$NINJA_BASE_FQDN = "TENANT_ID_GOES_HERE.rmmservice.com"
 
 $adminUsername = Read-Host "Provide an admin username"
 $adminPassword = Read-Host "Provide the password for this user"
