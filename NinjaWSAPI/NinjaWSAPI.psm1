@@ -332,6 +332,28 @@ function Set-NinjaWSOrgCustomFieldValue ($orgId,$customFieldName,$newCustomField
     }
 } 
 
+function Get-NinjaWSDeviceGroupMembers () {
+[CmdletBinding()]
+param (
+    # The Group ID to return all devices for
+    [Parameter(Mandatory=$true)]
+    [int]
+    $groupId,
+    # Authenticated SessionID to use
+    [Parameter(Mandatory=$true)]
+    [ParameterType]
+    $SESSIONKEY
+)
+    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
+    $session.Cookies.Add((New-Object System.Net.Cookie("sessionKey", "$SESSIONKEY", "/", "$NINJA_BASE_FQDN")))
+    $groupMembers = Invoke-RestMethod -UseBasicParsing -Uri "https://$NINJA_BASE_FQDN/ws/attributes/node/client/$($groupId)/values" `
+    -Method "Get" `
+    -WebSession $session `
+    -ContentType "application/json"
+    $groupMembers
+}
+
 #INCOMPLETE
 function Get-NinjaWSDeviceCustomFieldValue ($deviceId,$customFieldName,$SESSIONKEY) {
     $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
