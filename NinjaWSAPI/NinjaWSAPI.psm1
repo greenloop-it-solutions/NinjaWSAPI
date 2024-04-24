@@ -13,10 +13,8 @@ function New-NinjaWSSession {
     param (
         [Parameter(Mandatory=$true)]
         [string]$Username,
-        
         [Parameter(Mandatory=$true)]
         [string]$UserPassword,
-        
         [Parameter(Mandatory=$true)]
         [string]$MfaToken
     )
@@ -41,7 +39,14 @@ function New-NinjaWSSession {
     $sessionKey
 }
 
-function Get-NinjaWSClientOrgs ($SESSIONKEY) {
+function Get-NinjaWSClientOrgs  () {
+    [CmdletBinding()]
+    param (
+        [alias("Get-NinjaWSOrgs")]
+        [Parameter(Position=0,mandatory=$true)]
+        [String]
+        $SESSIONKEY
+    )
     $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
     $session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0"
     $session.Cookies.Add((New-Object System.Net.Cookie("sessionKey", "$SESSIONKEY", "/", "$NINJA_BASE_FQDN")))
@@ -50,7 +55,19 @@ function Get-NinjaWSClientOrgs ($SESSIONKEY) {
     $clientList
 }
 
-function Get-NinjaWSClientById ($clientId,$SESSIONKEY) {
+function Get-NinjaWSClientById () {
+[CmdletBinding()]
+[Alias("Get-NinjaWSOrgById")]
+param (
+    [Parameter(Position=0,mandatory=$true)]
+    [Alias("orgId")]
+    [int]
+    $clientId,
+    [Parameter(Position=1,mandatory=$true)]
+    [String]
+    $SESSIONKEY
+)
+
     $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
     $session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0"
     $session.Cookies.Add((New-Object System.Net.Cookie("sessionKey", "$SESSIONKEY", "/", "$NINJA_BASE_FQDN")))
@@ -67,7 +84,17 @@ function Get-NinjaWSPolicyList ($SESSIONKEY) {
     $policyList  
 }
 
-function Get-NinjaWSPolicy ($SESSIONKEY,$policyId) {
+function Get-NinjaWSPolicy () {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [int]
+        $policyId,
+        # Parameter help description
+        [Parameter(Mandatory=$true)]
+        [string]
+        $SESSIONKEY
+    )
     $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
     $session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0"
     $session.Cookies.Add((New-Object System.Net.Cookie("sessionKey", "$SESSIONKEY", "/", "$NINJA_BASE_FQDN")))
@@ -83,6 +110,30 @@ function Get-NinjaWSOrgPolicyMap ($orgId,$SESSIONKEY) {
     $response = Invoke-RestMethod -UseBasicParsing -Uri "https://$NINJA_BASE_FQDN/ws/client/$($orgId)" `
     -WebSession $session
     $response.client.nodeRolePolicyMap
+}
+
+function Enable-NinjaWSOrgSystray () {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [int]
+        $orgId,
+        [Parameter(Mandatory=$true)]
+        [string]
+        $SESSIONKEY
+    )
+    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0"
+    $session.Cookies.Add((New-Object System.Net.Cookie("sessionKey", "$SESSIONKEY", "/", "$NINJA_BASE_FQDN")))
+    $clientinfo = Get-NinjaWSClientById -clientId $orgId -SESSIONKEY $SESSIONKEY
+
+    #create the new body (trayicon only)
+    $body = $clientinfo
+    $body.content.branding.trayIconEnabled = $true
+    $body = $body | ConvertTo-Json -Depth 10
+
+    $response = Invoke-RestMethod -UseBasicParsing -Uri "https://$NINJA_BASE_FQDN/ws/client/$($orgId)" `
+    -WebSession $session -Method Put -Body $body -ContentType "application/json"
 }
 
 function Create-NinjaWSInheritedPolicy ($nodeClass,$policyName,$inheritedPolicyId,$SESSIONKEY) {
@@ -139,6 +190,25 @@ function Patch-NinjaWSPolicyByID ($policyid,$policy,$SESSIONKEY) {
 
     Invoke-NinjaWSRestMethod -Uri "https://$NINJA_BASE_FQDN/ws/policy/$($policyid)" -Method "PUT" -SESSIONKEY $SESSIONKEY -ContentType 'application/json' -Body $policy
 
+}
+
+function Add-NinjaWSWebrootToPolicy () {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [int]
+        $policyId,
+        [Parameter(Mandatory=$true)]
+        [string]
+        $SESSIONKEY
+    )
+    $policyBody = (Get-NinjaWSPolicy -policyId $policyId -SESSIONKEY $SESSIONKEY).policy
+    $policyBody.antivirusProductCode = "WEBROOT"
+    $policyBody.content.antivirus.general.productCode = "WEBROOT"
+    $policyBody.content.antivirus.general.inheritance.overridden = $true
+    $policyBody.content.antivirus.general | Add-Member -MemberType NoteProperty -Name 'enabled' -Value $true -Force
+    
+    Patch-NinjaWSPolicyByID -policyid $policyId -SESSIONKEY $SESSIONKEY -policy $policyBody
 }
 
 function Get-NinjaWSGlobalCustomFields {
@@ -381,13 +451,55 @@ function Get-NinjaWSUsers ($SESSIONKEY) {
     $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
     $session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0"
     $session.Cookies.Add((New-Object System.Net.Cookie("sessionKey", "$SESSIONKEY", "/", "$NINJA_BASE_FQDN")))
-    #this gets Technicians
+    #this gets appusers
     $users = Invoke-RestMethod -UseBasicParsing -Uri "https://$NINJA_BASE_FQDN/ws/appuser" `
     -WebSession $session `
     -ContentType "application/json"
-    #this gets EndUsers
-    $users += Invoke-RestMethod -UseBasicParsing -Uri "https://$NINJA_BASE_FQDN/ws/appuser?userType=END_USER" `
+    #add usertype
+    foreach ($useraccount in $users) {
+        $useraccount | Add-Member -MemberType NoteProperty -Name 'usertype' -Value 'appuser' -Force}
+    #this gets endusers
+    $endusers = Invoke-RestMethod -UseBasicParsing -Uri "https://$NINJA_BASE_FQDN/ws/appuser?userType=END_USER" `
     -WebSession $session `
     -ContentType "application/json"
+    #add usertype
+    foreach ($useraccount in $endusers) {
+        $useraccount | Add-Member -MemberType NoteProperty -Name 'usertype' -Value 'enduser' -Force}
+    $users += $endusers
     $users
+}
+
+function Get-NinjaWSUser ($email,$SESSIONKEY) {
+    $users = Get-NinjaWSUsers -SESSIONKEY $SESSIONKEY
+    $user = $users | ? {$_.email -eq $email} 
+    $user
+}
+
+function Delete-NinjaWSUser ($email,$SESSIONKEY) {
+    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0"
+    $session.Cookies.Add((New-Object System.Net.Cookie("sessionKey", "$SESSIONKEY", "/", "$NINJA_BASE_FQDN")))
+    #This gets User
+    $user = Get-NinjaWSUser -email $email -SESSIONKEY $SESSIONKEY
+    Write-Host "https://$NINJA_BASE_FQDN/ws/end-user/$($user.id)"
+        #Determine user type
+        switch ($user.usertype) {
+        {$_ -eq 'enduser'} {
+            #Remove Enduser
+            Invoke-WebRequest -UseBasicParsing -Uri "https://$NINJA_BASE_FQDN/ws/end-user/$($user.id)" `
+            -Method "DELETE" `
+            -WebSession $session `
+            -ContentType "application/json" 
+            Break
+        }
+        {$_ -eq 'appuser'} {
+            #Remove Appuser
+            Invoke-WebRequest -UseBasicParsing -Uri "https://$NINJA_BASE_FQDN/ws/appuser/$($user.id)" `
+            -Method "DELETE" `
+            -WebSession $session `
+            -ContentType "application/json" 
+            Break
+        }
+    }
+
 }
