@@ -75,6 +75,52 @@ param (
     $client.client
 }
 
+function Get-NinjaWSDeviceById () {
+    [CmdletBinding()]
+    param (
+        # the ID of the device to return
+        [Parameter(Mandatory=$true)]
+        [int]
+        $deviceId,
+        # Session Key
+        [Parameter(Mandatory=$true)]
+        [string]
+        $SESSIONKEY
+    )
+    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0"
+    $session.Cookies.Add((New-Object System.Net.Cookie("sessionKey", "$SESSIONKEY", "/", "$NINJA_BASE_FQDN")))
+    $device = Invoke-RestMethod -UseBasicParsing -Uri "https://$NINJA_BASE_FQDN/ws/node/$($deviceId)" `
+    -WebSession $session
+    $device.node
+}
+function Set-NinjaWSDevicePolicy () {
+    [CmdletBinding()]
+    param (
+        # the ID of the device to change policy for
+        [Parameter(Mandatory=$true)]
+        [int]
+        $deviceId,
+        # the ID of the destination policy. 
+        [Parameter(Mandatory=$true)]
+        [int]
+        $destPolicyId,
+        # Session Key
+        [Parameter(Mandatory=$true)]
+        [string]
+        $SESSIONKEY
+    )
+    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+    $session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0"
+    $session.Cookies.Add((New-Object System.Net.Cookie("sessionKey", "$SESSIONKEY", "/", "$NINJA_BASE_FQDN")))
+    $destPolicy = Get-NinjaWSPolicyByID -policyid $destPolicyId -SESSIONKEY $SESSIONKEY
+    $device = Get-NinjaWSDeviceById -deviceId $deviceId -SESSIONKEY $SESSIONKEY
+    $device.policyId = $destPolicyId
+    $device.policyName = $destPolicy.name
+    $deviceJson = $device | ConvertTo-Json -Depth 10
+    Invoke-NinjaWSRestMethod -Uri "https://$NINJA_BASE_FQDN/ws/node/$deviceId" -Method Put -SESSIONKEY $SESSIONKEY -Body $deviceJson
+}
+
 function Get-NinjaWSPolicyList ($SESSIONKEY) {
     $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
     $session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0"
@@ -332,6 +378,7 @@ function Set-NinjaWSOrgCustomFieldValue ($orgId,$customFieldName,$newCustomField
     }
 } 
 
+# Currently not working - unclear how to get the searchCriteria programmatically
 function Get-NinjaWSDeviceGroupMembers () {
 [CmdletBinding()]
 param (
@@ -341,17 +388,10 @@ param (
     $groupId,
     # Authenticated SessionID to use
     [Parameter(Mandatory=$true)]
-    [ParameterType]
+    [string]
     $SESSIONKEY
 )
-    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-    $session.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
-    $session.Cookies.Add((New-Object System.Net.Cookie("sessionKey", "$SESSIONKEY", "/", "$NINJA_BASE_FQDN")))
-    $groupMembers = Invoke-RestMethod -UseBasicParsing -Uri "https://$NINJA_BASE_FQDN/ws/attributes/node/client/$($groupId)/values" `
-    -Method "Get" `
-    -WebSession $session `
-    -ContentType "application/json"
-    $groupMembers
+
 }
 
 #INCOMPLETE
